@@ -3,27 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro de Ubicación</title>
+    <title>LogisticTrack - Registro de Ubicación</title>
+    <meta name="description" content="Sistema de registro de ubicaciones para entregas de paquetes">
+    
+    <!-- Estilos -->
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Preload para mejor performance -->
+    <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" as="script">
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <header>
             <div class="logo">
                 <i class="fas fa-map-marker-alt"></i>
                 <h1>LogisticTrack</h1>
             </div>
-            <p>Registra su ubicación de entrega</p>
+            <p>Registro seguro de ubicación para tu entrega</p>
         </header>
 
         <!-- Mensaje de éxito -->
         <div id="successMessage" class="success-card hidden">
             <div class="success-content">
                 <i class="fas fa-check-circle"></i>
-                <h3>¡Ubicación registrada!</h3>
-                <p>Tu ubicación ha sido registrada exitosamente</p>
+                <h3>¡Registro Completado!</h3>
+                <p>Tu información ha sido guardada exitosamente</p>
                 <div class="success-details" id="successDetails"></div>
                 <button onclick="resetForm()" class="new-registration-btn">
                     <i class="fas fa-plus"></i>
@@ -32,28 +39,49 @@
             </div>
         </div>
 
+        <!-- Contenido principal -->
         <main>
             <div class="main-layout">
                 <!-- Columna del formulario -->
                 <div class="form-column">
                     <div class="form-card">
-                        <form id="locationForm">
+                        <form id="locationForm" novalidate>
+                            <!-- Código del paquete -->
                             <div class="input-group">
                                 <label for="packageCode">
                                     <i class="fas fa-box"></i>
                                     Código del paquete
                                 </label>
-                                <input type="text" id="packageCode" placeholder="Debe empezar con 6 (13 dígitos)" required maxlength="13">
-                                <small class="input-hint">Ejemplo: 6123456789012 (13 dígitos que empiezan con 6)</small>
+                                <input 
+                                    type="text" 
+                                    id="packageCode" 
+                                    placeholder="6123456789012 (13 dígitos)" 
+                                    required 
+                                    maxlength="13"
+                                    pattern="^6\d{12}$"
+                                    title="Debe empezar con 6 y tener 13 dígitos"
+                                >
+                                <small class="input-hint">Ejemplo: 6123456789012 - debe empezar con 6</small>
+                                <div class="validation-message" id="packageCodeValidation"></div>
                             </div>
 
+                            <!-- Teléfono -->
                             <div class="input-group">
                                 <label for="phone">
                                     <i class="fas fa-phone"></i>
                                     Número de teléfono
                                 </label>
-                                <input type="tel" id="phone" placeholder="9 dígitos" required maxlength="11">
+                                <input 
+                                    type="tel" 
+                                    id="phone" 
+                                    placeholder="999 888 777" 
+                                    required 
+                                    maxlength="11"
+                                    pattern="^\d{9}$"
+                                    title="9 dígitos sin espacios"
+                                >
                                 <small class="input-hint">Ejemplo: 999 888 777 (9 dígitos)</small>
+                                <div class="validation-message" id="phoneValidation"></div>
                             </div>
 
                             <!-- Opción de recojo en punto -->
@@ -62,16 +90,17 @@
                                     <input type="checkbox" id="pickupCheckbox">
                                     <span class="checkmark"></span>
                                     <div class="checkbox-text">
-                                        <strong>Prefiero recoger en San Juan de Lurigancho</strong>
-                                        <small>No necesitarás registrar tu ubicación</small>
+                                        <strong>Recojo en punto de entrega</strong>
+                                        <small>Selecciona esta opción si prefieres recoger en nuestra sede</small>
                                     </div>
                                 </label>
                             </div>
 
-                            <div class="location-section">
+                            <!-- Sección de ubicación -->
+                            <div class="location-section" id="locationSection">
                                 <div class="location-status" id="locationStatus">
                                     <i class="fas fa-crosshairs"></i>
-                                    <span>Presiona el botón para obtener tu ubicación</span>
+                                    <span>Haz clic en el botón para obtener tu ubicación</span>
                                 </div>
                                 
                                 <button type="button" id="getLocationBtn" class="location-btn">
@@ -83,7 +112,7 @@
                                 <div id="mapContainerMobile" class="map-container map-mobile hidden">
                                     <div class="map-header">
                                         <h4><i class="fas fa-map"></i> Confirma tu ubicación</h4>
-                                        <p>Puedes mover el marcador para ajustar la posición exacta</p>
+                                        <p>Arrastra el marcador para ajustar la posición exacta</p>
                                     </div>
                                     <div id="mapMobile" class="map"></div>
                                     <div class="map-coords">
@@ -92,10 +121,19 @@
                                 </div>
                             </div>
 
+                            <!-- Botón de envío -->
                             <button type="submit" id="submitBtn" class="submit-btn" disabled>
                                 <i class="fas fa-paper-plane"></i>
-                                Registrar ubicación
+                                <span id="submitText">Registrar ubicación</span>
                             </button>
+
+                            <!-- Información de privacidad -->
+                            <div class="privacy-notice">
+                                <small>
+                                    <i class="fas fa-shield-alt"></i>
+                                    Tus datos están protegidos y solo se usan para la entrega
+                                </small>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -104,8 +142,8 @@
                 <div class="map-column">
                     <div id="mapContainerDesktop" class="map-container map-desktop hidden">
                         <div class="map-header">
-                            <h4><i class="fas fa-map"></i> Confirma tu ubicación</h4>
-                            <p>Puedes mover el marcador para ajustar la posición exacta</p>
+                            <h4><i class="fas fa-map"></i> Tu ubicación en el mapa</h4>
+                            <p>Puedes ajustar la posición arrastrando el marcador</p>
                         </div>
                         <div id="mapDesktop" class="map map-desktop-size"></div>
                         <div class="map-coords">
@@ -116,11 +154,11 @@
             </div>
         </main>
 
-        <!-- Loading -->
+        <!-- Loading overlay -->
         <div id="loading" class="loading-overlay hidden">
             <div class="loading-content">
                 <div class="spinner"></div>
-                <p>Obteniendo ubicación...</p>
+                <p id="loadingText">Procesando...</p>
             </div>
         </div>
 
@@ -129,17 +167,18 @@
             <div class="modal-content">
                 <div class="error-content">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Error</h3>
+                    <h3 id="errorTitle">Error</h3>
                     <p id="errorMessage"></p>
                     <button onclick="closeError()" class="error-btn">
                         <i class="fas fa-times"></i>
-                        Cerrar
+                        Entendido
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
 </body>
