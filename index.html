@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Ubicación</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-map-marker-alt"></i>
+                <h1>LogisticTrack</h1>
+            </div>
+            <p>Registra su ubicación de entrega</p>
+        </header>
+
+        <!-- Mensaje de éxito -->
+        <div id="successMessage" class="success-card hidden">
+            <div class="success-content">
+                <i class="fas fa-check-circle"></i>
+                <h3>¡Ubicación registrada!</h3>
+                <p>Tu ubicación ha sido registrada exitosamente</p>
+                <div class="success-details" id="successDetails"></div>
+                <button onclick="resetForm()" class="new-registration-btn">
+                    <i class="fas fa-plus"></i>
+                    Nuevo registro
+                </button>
+            </div>
+        </div>
+
+        <main>
+            <div class="main-layout">
+                <!-- Columna del formulario -->
+                <div class="form-column">
+                    <div class="form-card">
+                        <form id="locationForm">
+                            <div class="input-group">
+                                <label for="packageCode">
+                                    <i class="fas fa-box"></i>
+                                    Código del paquete
+                                </label>
+                                <input type="text" id="packageCode" placeholder="Debe empezar con 6 (13 dígitos)" required maxlength="13">
+                                <small class="input-hint">Ejemplo: 6123456789012 (13 dígitos que empiezan con 6)</small>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="phone">
+                                    <i class="fas fa-phone"></i>
+                                    Número de teléfono
+                                </label>
+                                <input type="tel" id="phone" placeholder="9 dígitos" required maxlength="11">
+                                <small class="input-hint">Ejemplo: 999 888 777 (9 dígitos)</small>
+                            </div>
+
+                            <!-- Opción de recojo en punto -->
+                            <div class="pickup-option">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="pickupCheckbox">
+                                    <span class="checkmark"></span>
+                                    <div class="checkbox-text">
+                                        <strong>Prefiero recoger en San Juan de Lurigancho</strong>
+                                        <small>No necesitarás registrar tu ubicación</small>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div class="location-section">
+                                <div class="location-status" id="locationStatus">
+                                    <i class="fas fa-crosshairs"></i>
+                                    <span>Presiona el botón para obtener tu ubicación</span>
+                                </div>
+                                
+                                <button type="button" id="getLocationBtn" class="location-btn">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    Obtener mi ubicación
+                                </button>
+
+                                <!-- Mapa móvil -->
+                                <div id="mapContainerMobile" class="map-container map-mobile hidden">
+                                    <div class="map-header">
+                                        <h4><i class="fas fa-map"></i> Confirma tu ubicación</h4>
+                                        <p>Puedes mover el marcador para ajustar la posición exacta</p>
+                                    </div>
+                                    <div id="mapMobile" class="map"></div>
+                                    <div class="map-coords">
+                                        <small id="mapCoordsMobile">Coordenadas: --</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="submitBtn" class="submit-btn" disabled>
+                                <i class="fas fa-paper-plane"></i>
+                                Registrar ubicación
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Columna del mapa desktop -->
+                <div class="map-column">
+                    <div id="mapContainerDesktop" class="map-container map-desktop hidden">
+                        <div class="map-header">
+                            <h4><i class="fas fa-map"></i> Confirma tu ubicación</h4>
+                            <p>Puedes mover el marcador para ajustar la posición exacta</p>
+                        </div>
+                        <div id="mapDesktop" class="map map-desktop-size"></div>
+                        <div class="map-coords">
+                            <small id="mapCoordsDesktop">Coordenadas: --</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>Obteniendo ubicación...</p>
+            </div>
+        </div>
+
+        <!-- Modal de error -->
+        <div id="errorModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="error-content">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error</h3>
+                    <p id="errorMessage"></p>
+                    <button onclick="closeError()" class="error-btn">
+                        <i class="fas fa-times"></i>
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
