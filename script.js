@@ -5,6 +5,12 @@ let mapDesktop = null;
 let markerMobile = null;
 let markerDesktop = null;
 
+// Configuración para Google Sheets
+const SHEET_CONFIG = {
+    // ✅ REEMPLAZA ESTO con tu URL REAL de Google Apps Script
+    SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbz4N2X3IdbCoh3DsF5qhOgbATNHGD8GpiFNjGkO_Bo8Q5wdciZ0KR7-B4jaWPkRk07m/exec'
+};
+
 // Elementos del DOM
 const packageCodeInput = document.getElementById('packageCode');
 const phoneInput = document.getElementById('phone');
@@ -23,32 +29,47 @@ const mapContainerDesktop = document.getElementById('mapContainerDesktop');
 const mapCoordsMobile = document.getElementById('mapCoordsMobile');
 const mapCoordsDesktop = document.getElementById('mapCoordsDesktop');
 
-// Configuración para Google Sheets
-const SHEET_CONFIG = {
-    // URL de tu Google Apps Script (necesitarás crear uno)
-    SCRIPT_URL: 'https://script.google.com/macros/s/TU_SCRIPT_ID/exec'
-};
-
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Página cargada - Inicializando...');
+    
+    // Verificar si Leaflet está cargado
+    if (typeof L === 'undefined') {
+        console.error('❌ Leaflet no está cargado');
+        showError('Error: Mapas no disponibles. Recarga la página.');
+        return;
+    }
+    
+    // Eventos del formulario
     getLocationBtn.addEventListener('click', getCurrentLocation);
     locationForm.addEventListener('submit', handleSubmit);
+    
+    // Validación en tiempo real
     packageCodeInput.addEventListener('input', validateForm);
     phoneInput.addEventListener('input', validateForm);
+    
+    // Auto-formato del teléfono
     phoneInput.addEventListener('input', formatPhone);
+    
+    // Checkbox de recojo en punto
     pickupCheckbox.addEventListener('change', handlePickupChange);
     
+    // Cerrar modal de error
     errorModal.addEventListener('click', function(e) {
         if (e.target === errorModal) {
             closeError();
         }
     });
+    
+    console.log('✅ Event listeners configurados');
 });
 
 // Manejar cambio del checkbox de recojo
 function handlePickupChange() {
     const isPickup = pickupCheckbox.checked;
     const locationSection = document.querySelector('.location-section');
+    
+    console.log('🔄 Checkbox cambiado:', isPickup);
     
     if (isPickup) {
         locationSection.style.display = 'none';
@@ -65,8 +86,10 @@ function handlePickupChange() {
     validateForm();
 }
 
-// Obtener ubicación actual
+// Obtener ubicación actual - VERSIÓN MEJORADA
 function getCurrentLocation() {
+    console.log('📍 Solicitando ubicación...');
+    
     if (!navigator.geolocation) {
         showError('Tu navegador no soporta geolocalización');
         return;
@@ -74,38 +97,44 @@ function getCurrentLocation() {
 
     showLoading();
     getLocationBtn.disabled = true;
+    getLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obteniendo ubicación...';
 
     const options = {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 10000, // 10 segundos
         maximumAge: 60000
     };
 
     navigator.geolocation.getCurrentPosition(
         (position) => {
+            console.log('✅ Ubicación obtenida:', position.coords);
             hideLoading();
+            
             const { latitude, longitude } = position.coords;
             currentLocation = { latitude, longitude };
             
             showLocationSuccess(latitude, longitude);
             showMaps(latitude, longitude);
             getLocationBtn.disabled = false;
+            getLocationBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Actualizar ubicación';
             validateForm();
         },
         (error) => {
+            console.error('❌ Error obteniendo ubicación:', error);
             hideLoading();
             getLocationBtn.disabled = false;
+            getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Obtener mi ubicación';
             
             let errorMsg = 'No se pudo obtener tu ubicación. ';
             switch (error.code) {
                 case error.PERMISSION_DENIED:
-                    errorMsg += 'Por favor permite el acceso a tu ubicación.';
+                    errorMsg += 'Por favor permite el acceso a tu ubicación en la configuración de tu navegador.';
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    errorMsg += 'Ubicación no disponible.';
+                    errorMsg += 'Ubicación no disponible. Verifica tu conexión.';
                     break;
                 case error.TIMEOUT:
-                    errorMsg += 'Tiempo de espera agotado.';
+                    errorMsg += 'Tiempo de espera agotado. Intenta nuevamente.';
                     break;
                 default:
                     errorMsg += 'Error desconocido.';
@@ -124,73 +153,87 @@ function showLocationSuccess(lat, lng) {
         <span>Ubicación obtenida: ${lat.toFixed(6)}, ${lng.toFixed(6)}</span>
     `;
     locationStatus.classList.add('success');
-    
-    getLocationBtn.innerHTML = `
-        <i class="fas fa-sync-alt"></i>
-        Actualizar ubicación
-    `;
 }
 
 // Manejar envío del formulario
 async function handleSubmit(e) {
     e.preventDefault();
+    console.log('📤 Enviando formulario...');
     
     if (!validateForm()) {
+        showError('Por favor completa todos los campos correctamente.');
         return;
     }
 
     const packageCode = packageCodeInput.value.trim();
     const phone = phoneInput.value.trim();
     
+    console.log('📝 Datos a guardar:', { packageCode, phone, currentLocation });
+    
     showLoading();
     
     try {
-        // Guardar en Google Sheets
-        await saveToGoogleSheets(packageCode, phone, currentLocation);
+        // Guardar registro
+        const result = await saveToGoogleSheets(packageCode, phone, currentLocation);
+        console.log('✅ Resultado del guardado:', result);
         
         hideLoading();
         showSuccessMessage(packageCode, phone, currentLocation);
         
     } catch (error) {
+        console.error('❌ Error en envío:', error);
         hideLoading();
-        showError('Error al guardar el registro. Por favor intenta nuevamente.');
-        console.error('Error en envío:', error);
+        showError('Error al guardar el registro: ' + error.message);
     }
 }
 
-// Guardar en Google Sheets (versión simplificada)
+// Guardar en Google Sheets
 async function saveToGoogleSheets(packageCode, phone, location) {
+    console.log('💾 Intentando guardar en Google Sheets...');
+    
+    // Si es recojo en punto, usar coordenadas especiales
+    const finalLocation = location.isPickup ? 
+        { latitude: -12.048012, longitude: -77.000123, isPickup: true } : 
+        location;
+    
     try {
-        // Si tienes Google Apps Script configurado
-        if (SHEET_CONFIG.SCRIPT_URL && SHEET_CONFIG.SCRIPT_URL !== 'https://script.google.com/macros/s/TU_SCRIPT_ID/exec') {
-            const response = await fetch(SHEET_CONFIG.SCRIPT_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    packageCode,
-                    phone,
-                    latitude: location.latitude,
-                    longitude: location.longitude,
-                    isPickup: location.isPickup || false,
-                    timestamp: new Date().toISOString()
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Error en la respuesta del servidor');
-            }
-            
-            return await response.json();
-        } else {
-            // Fallback a localStorage
-            return saveToLocalStorage(packageCode, phone, location);
+        // Verificar si tenemos URL válida
+        if (!SHEET_CONFIG.SCRIPT_URL || SHEET_CONFIG.SCRIPT_URL.includes('TU_SCRIPT_ID')) {
+            throw new Error('URL de Google Sheets no configurada');
         }
+        
+        const response = await fetch(SHEET_CONFIG.SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                packageCode: packageCode,
+                phone: phone,
+                latitude: finalLocation.latitude,
+                longitude: finalLocation.longitude,
+                isPickup: finalLocation.isPickup || false,
+                timestamp: new Date().toISOString()
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('📊 Respuesta de Google Sheets:', result);
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Error desconocido en Google Sheets');
+        }
+        
+        return result;
+        
     } catch (error) {
-        console.error('Error guardando en Google Sheets:', error);
-        // Fallback a localStorage
-        return saveToLocalStorage(packageCode, phone, location);
+        console.warn('⚠️ Fallback a localStorage:', error.message);
+        // Si falla, guardar en localStorage
+        return saveToLocalStorage(packageCode, phone, finalLocation);
     }
 }
 
@@ -211,10 +254,11 @@ function saveToLocalStorage(packageCode, phone, location) {
         existing.unshift(registration);
         localStorage.setItem('locationRegistrations', JSON.stringify(existing));
         
-        return { success: true, ...registration };
+        console.log('💾 Guardado en localStorage:', registration);
+        return { success: true, source: 'localStorage', ...registration };
     } catch (error) {
-        console.error('Error guardando en localStorage:', error);
-        return { success: false };
+        console.error('❌ Error guardando en localStorage:', error);
+        return { success: false, error: error.message };
     }
 }
 
@@ -228,33 +272,17 @@ function validateForm() {
     const isValidPackageCode = /^6\d{12}$/.test(packageCode);
     const isValidPhone = /^\d{9}$/.test(phone);
     
-    // Actualizar clases de validación visual
-    if (packageCodeInput.value.length > 0) {
-        if (isValidPackageCode) {
-            packageCodeInput.classList.remove('invalid');
-            packageCodeInput.classList.add('valid');
-        } else {
-            packageCodeInput.classList.add('invalid');
-            packageCodeInput.classList.remove('valid');
-        }
-    } else {
-        packageCodeInput.classList.remove('invalid', 'valid');
-    }
+    // Actualizar clases visuales
+    packageCodeInput.classList.toggle('valid', isValidPackageCode && packageCode.length > 0);
+    packageCodeInput.classList.toggle('invalid', !isValidPackageCode && packageCode.length > 0);
     
-    if (phoneInput.value.length > 0) {
-        if (isValidPhone) {
-            phoneInput.classList.remove('invalid');
-            phoneInput.classList.add('valid');
-        } else {
-            phoneInput.classList.add('invalid');
-            phoneInput.classList.remove('valid');
-        }
-    } else {
-        phoneInput.classList.remove('invalid', 'valid');
-    }
+    phoneInput.classList.toggle('valid', isValidPhone && phone.length > 0);
+    phoneInput.classList.toggle('invalid', !isValidPhone && phone.length > 0);
     
     const isValid = isValidPackageCode && isValidPhone && (isPickup || hasLocation);
     submitBtn.disabled = !isValid;
+    
+    console.log('🔍 Validación:', { isValidPackageCode, isValidPhone, isPickup, hasLocation, isValid });
     
     return isValid;
 }
@@ -294,11 +322,11 @@ function showSuccessMessage(packageCode, phone, location) {
     
     if (isPickup) {
         successDetails.innerHTML = `
-            <div class="pickup-success-message">
-                <h3 style="color: #27ae60; margin-bottom: 12px;">
+            <div style="margin-bottom: 16px;">
+                <h4 style="color: #27ae60; margin-bottom: 8px;">
                     <i class="fas fa-store"></i> Recojo en San Juan de Lurigancho
-                </h3>
-                <p style="font-size: 1.1rem; margin-bottom: 16px;">
+                </h4>
+                <p style="color: #155724;">
                     ✅ <strong>Un asesor se contactará con usted para coordinar el recojo</strong>
                 </p>
             </div>
@@ -321,10 +349,6 @@ function showSuccessMessage(packageCode, phone, location) {
     successMessage.classList.remove('hidden');
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    
-    setTimeout(() => {
-        successMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
 }
 
 // Resetear formulario
@@ -343,10 +367,7 @@ function resetForm() {
     `;
     locationStatus.classList.remove('success');
     
-    getLocationBtn.innerHTML = `
-        <i class="fas fa-map-marker-alt"></i>
-        Obtener mi ubicación
-    `;
+    getLocationBtn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Obtener mi ubicación';
     getLocationBtn.disabled = false;
     
     submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Registrar ubicación';
@@ -364,8 +385,10 @@ function resetForm() {
     packageCodeInput.focus();
 }
 
-// Funciones del mapa
+// Funciones del mapa - VERSIÓN CORREGIDA
 function showMaps(lat, lng) {
+    console.log('🗺 Mostrando mapas:', lat, lng);
+    
     mapContainerMobile.classList.remove('hidden');
     mapContainerDesktop.classList.remove('hidden');
     
@@ -375,75 +398,89 @@ function showMaps(lat, lng) {
 }
 
 function initMobileMap(lat, lng) {
-    if (!mapMobile) {
-        mapMobile = L.map('mapMobile').setView([lat, lng], 16);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(mapMobile);
-        
-        markerMobile = L.marker([lat, lng], {
-            draggable: true,
-            title: 'Arrastra para ajustar tu ubicación'
-        }).addTo(mapMobile);
-        
-        markerMobile.bindPopup('<b>Tu ubicación</b><br>Arrastra el marcador para ajustar').openPopup();
-        
-        markerMobile.on('dragend', function(e) {
-            const position = e.target.getLatLng();
-            updateLocation(position.lat, position.lng);
-        });
-        
-        mapMobile.on('click', function(e) {
-            const { lat, lng } = e.latlng;
+    try {
+        if (!mapMobile) {
+            console.log('📱 Inicializando mapa móvil...');
+            mapMobile = L.map('mapMobile').setView([lat, lng], 16);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(mapMobile);
+            
+            markerMobile = L.marker([lat, lng], {
+                draggable: true,
+                title: 'Arrastra para ajustar tu ubicación'
+            }).addTo(mapMobile);
+            
+            markerMobile.bindPopup('<b>Tu ubicación</b><br>Arrastra el marcador para ajustar').openPopup();
+            
+            markerMobile.on('dragend', function(e) {
+                const position = e.target.getLatLng();
+                updateLocation(position.lat, position.lng);
+            });
+            
+            mapMobile.on('click', function(e) {
+                const { lat, lng } = e.latlng;
+                markerMobile.setLatLng([lat, lng]);
+                updateLocation(lat, lng);
+            });
+            
+            console.log('✅ Mapa móvil inicializado');
+        } else {
+            mapMobile.setView([lat, lng], 16);
             markerMobile.setLatLng([lat, lng]);
-            updateLocation(lat, lng);
-        });
-    } else {
-        mapMobile.setView([lat, lng], 16);
-        markerMobile.setLatLng([lat, lng]);
+        }
+        
+        setTimeout(() => {
+            if (mapMobile) mapMobile.invalidateSize();
+        }, 100);
+    } catch (error) {
+        console.error('❌ Error inicializando mapa móvil:', error);
     }
-    
-    setTimeout(() => {
-        if (mapMobile) mapMobile.invalidateSize();
-    }, 100);
 }
 
 function initDesktopMap(lat, lng) {
-    if (!mapDesktop) {
-        mapDesktop = L.map('mapDesktop').setView([lat, lng], 16);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(mapDesktop);
-        
-        markerDesktop = L.marker([lat, lng], {
-            draggable: true,
-            title: 'Arrastra para ajustar tu ubicación'
-        }).addTo(mapDesktop);
-        
-        markerDesktop.bindPopup('<b>Tu ubicación</b><br>Arrastra el marcador para ajustar').openPopup();
-        
-        markerDesktop.on('dragend', function(e) {
-            const position = e.target.getLatLng();
-            updateLocation(position.lat, position.lng);
-        });
-        
-        mapDesktop.on('click', function(e) {
-            const { lat, lng } = e.latlng;
+    try {
+        if (!mapDesktop) {
+            console.log('💻 Inicializando mapa desktop...');
+            mapDesktop = L.map('mapDesktop').setView([lat, lng], 16);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(mapDesktop);
+            
+            markerDesktop = L.marker([lat, lng], {
+                draggable: true,
+                title: 'Arrastra para ajustar tu ubicación'
+            }).addTo(mapDesktop);
+            
+            markerDesktop.bindPopup('<b>Tu ubicación</b><br>Arrastra el marcador para ajustar').openPopup();
+            
+            markerDesktop.on('dragend', function(e) {
+                const position = e.target.getLatLng();
+                updateLocation(position.lat, position.lng);
+            });
+            
+            mapDesktop.on('click', function(e) {
+                const { lat, lng } = e.latlng;
+                markerDesktop.setLatLng([lat, lng]);
+                updateLocation(lat, lng);
+            });
+            
+            console.log('✅ Mapa desktop inicializado');
+        } else {
+            mapDesktop.setView([lat, lng], 16);
             markerDesktop.setLatLng([lat, lng]);
-            updateLocation(lat, lng);
-        });
-    } else {
-        mapDesktop.setView([lat, lng], 16);
-        markerDesktop.setLatLng([lat, lng]);
+        }
+        
+        setTimeout(() => {
+            if (mapDesktop) mapDesktop.invalidateSize();
+        }, 100);
+    } catch (error) {
+        console.error('❌ Error inicializando mapa desktop:', error);
     }
-    
-    setTimeout(() => {
-        if (mapDesktop) mapDesktop.invalidateSize();
-    }, 100);
 }
 
 function updateLocation(lat, lng) {
@@ -482,6 +519,7 @@ function hideLoading() {
 }
 
 function showError(message) {
+    console.error('❌ Error:', message);
     errorMessage.textContent = message;
     errorModal.classList.remove('hidden');
 }
@@ -492,5 +530,9 @@ function closeError() {
 
 // Auto-enfocar al cargar
 window.addEventListener('load', function() {
+    console.log('🎯 Enfocando campo de código...');
     packageCodeInput.focus();
 });
+
+// Verificar que todo esté cargado
+console.log('🔧 script.js cargado correctamente');
